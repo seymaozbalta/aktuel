@@ -1,0 +1,7 @@
+requests>=2.32
+beautifulsoup4>=4.12
+lxml>=5.2
+supabase>=2.15
+python-dotenv>=1.0
+pydantic>=2.9
+tenacity>=9.0

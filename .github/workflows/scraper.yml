@@ -1,0 +1,56 @@
+name: BİM Aktüel Toplayıcı
+
+on:
+  # GitHub Actions cron'u HER ZAMAN UTC calisir.
+  # Turkiye UTC+3 ve yaz saati uygulamiyor, yani fark sabit 3 saat.
+  # 04:00 UTC = 07:00 TSI
+  schedule:
+    - cron: "0 4 * * *"
+  # Elle tetiklemeye izin ver (Actions sekmesindeki "Run workflow" butonu).
+  # Cron'u beklemeden test edebilmek icin sart.
+  workflow_dispatch:
+
+# Ayni anda iki calistirma olmasin. Elle tetikledigin sirada cron da
+# devreye girerse ikisi ayni satirlari yazmaya calisir.
+concurrency:
+  group: bim-scraper
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    # Normalde 30 saniye surer. 10 dakikayi asiyorsa bir sey takilmistir;
+    # sonsuza kadar calisip dakika harcamasin.
+    timeout-minutes: 10
+
+    steps:
+      - name: Depoyu indir
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Bagimliliklari yukle
+        run: pip install -r requirements.txt
+
+      - name: Toplayiciyi calistir
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # Hata ayiklama icin ham HTML'i sakla; asagida artifact olarak yuklenir
+          SAVE_RAW_HTML: "1"
+        # --min-products: parser kismen bozulursa (75 yerine 4 urun) is
+        # basarisiz olsun ve GitHub sana e-posta atsin. Bu satir olmadan
+        # bozulma sessizce gerceklesir.
+        run: python -m src.main --min-products 40
+
+      - name: Hata halinde ham HTML'i sakla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ham-html-${{ github.run_id }}
+          path: data/raw/
+          retention-days: 7
