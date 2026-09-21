@@ -67,7 +67,16 @@ SOK_CATEGORIES: dict[str, str | None] = {
 # --------------------------------------------------------------------------
 # Seciciler (hash'e dayanikli)
 # --------------------------------------------------------------------------
+# Tahmin tutmazsa kullanilacak kategori. Kaynak "yemeklik malzemeler"
+# oldugu icin en azindan temel malzeme oldugunu biliyoruz; bos birakmak
+# yerine bunu yaziyoruz.
+SOK_FALLBACK_CATEGORIES: dict[str, str] = {
+    "/yemeklik-malzemeler-c-1770": "temel-malzeme",
+}
+
 PRODUCT_HREF_RE = re.compile(r"-p-(\d+)/?$")
+# "Domates Kg", "Tuzlu Kabuklu Fistik Kg": sayi yok, kiloyla satiliyor
+BARE_UNIT_RE = re.compile(r"\s+(kg|adet)\s*$", re.I)
 TITLE_CLS_RE = re.compile(r"^CProductCard-module_title")
 PRICEBOX_CLS_RE = re.compile(r"^CPriceBox-module_cPriceBox")
 PRICE_TESTID_RE = re.compile(r"price", re.I)
@@ -83,6 +92,10 @@ def split_title_unit(title: str) -> tuple[str, str | None]:
     title = " ".join(title.split())
     matches = list(UNIT_RE.finditer(title))
     if not matches:
+        # Kiloyla satilan urunler: "Domates Kg" -> ("Domates", "1 kg")
+        bare = BARE_UNIT_RE.search(title)
+        if bare:
+            return title[: bare.start()].strip(), f"1 {bare.group(1).lower()}"
         return title, None
     m = matches[-1]
     tail = title[m.end():].strip()
@@ -174,7 +187,8 @@ class SokScraper(BaseScraper):
 
     # -- tek sayfa ---------------------------------------------------------
     def parse(self, html: str, *, source_url: str,
-              category: str | None = None) -> list[ScrapedProduct]:
+              category: str | None = None,
+              fallback_category: str | None = None) -> list[ScrapedProduct]:
         soup = BeautifulSoup(html, "lxml")
         items: list[ScrapedProduct] = []
         seen: set[str] = set()
@@ -209,7 +223,9 @@ class SokScraper(BaseScraper):
                     external_id=product_id,
                     name=name,
                     brand=None,  # SOK markayi ayri alanda vermiyor; ad icinde
-                    category=category or guess_category(None, name, unit_raw),
+                    category=(category
+                              or guess_category(None, name, unit_raw)
+                              or fallback_category),
                     unit_raw=unit_raw,
                     unit_amount=unit_amount,
                     unit_type=unit_type,
@@ -226,7 +242,9 @@ class SokScraper(BaseScraper):
 
     # -- bir kategoriyi bastan sona gez -----------------------------------
     def scrape_category(self, path: str, category: str | None,
-                        max_pages: int = SOK_MAX_PAGES) -> list[ScrapedProduct]:
+                        max_pages: int = SOK_MAX_PAGES,
+                        fallback_category: str | None = None
+                        ) -> list[ScrapedProduct]:
         collected: dict[str, ScrapedProduct] = {}
         page_size: int | None = None
         slug = path.strip("/").split("-c-")[0][:30]
@@ -237,7 +255,8 @@ class SokScraper(BaseScraper):
                 url = f"{url}?page={page}"
             # Sadece ilk sayfayi diske yaz; hepsini yazmak yuzlerce MB eder
             html = self.fetch(url, tag=f"{slug}_p{page}", save=(page == 1))
-            items = self.parse(html, source_url=url, category=category)
+            items = self.parse(html, source_url=url, category=category,
+                               fallback_category=fallback_category)
 
             new = [i for i in items if i.fingerprint not in collected]
             for i in new:
@@ -269,7 +288,9 @@ class SokScraper(BaseScraper):
 
         for path, category in categories.items():
             try:
-                items = self.scrape_category(path, category)
+                items = self.scrape_category(
+                    path, category,
+                    fallback_category=SOK_FALLBACK_CATEGORIES.get(path))
             except Exception as exc:
                 # Bir kategori patlarsa digerleri yine toplansin
                 log.error("kategori basarisiz %s: %s", path, exc)

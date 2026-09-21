@@ -57,6 +57,17 @@ CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
         "sosis", "doner", "salam", "somon", "balik", "kavurma", "burger",
         "kebap", "manti", "jambon", "pastirma", "ton", "sushi", "maki",
     ),
+    # Tuz, seker, baharat, maya... Cok kelimeli ifadeler ("toz seker")
+    # tek kelimelilerden ("seker") fazla puan alir; boylece "Toz Seker"
+    # buraya, "Yumusak Seker" atistirmaliga gider.
+    "temel-malzeme": (
+        "toz seker", "kup seker", "kesme seker", "pudra sekeri", "esmer seker",
+        "tuz", "tuzu", "sofra tuzu", "kaya tuzu", "iyotlu",
+        "baharat", "baharati", "karabiber", "pul biber", "kimyon", "kekik",
+        "kuru nane", "tarcin", "zerdecal", "sumak", "yenibahar",
+        "maya", "kuru maya", "kabartma tozu", "vanilin", "nisasta",
+        "bulyon", "corba", "corbasi", "tarhana", "konserve", "tursu", "tursusu",
+    ),
     "bakliyat-tahil": (
         "pirinc", "pirinci", "mercimek", "mercimegi", "nohut", "fasulye",
         "bulgur", "makarna", "un", "unu", "irmik", "sehriye", "lazanya",
@@ -98,7 +109,7 @@ _CATEGORY_PATTERNS: dict[str, re.Pattern[str]] = {
 
 TEMEL_GIDA_CATEGORIES = {
     "sut-urunleri", "et-tavuk-balik", "bakliyat-tahil",
-    "yag-sos-salca", "kahvaltilik", "icecek", "meyve-sebze",
+    "yag-sos-salca", "kahvaltilik", "icecek", "meyve-sebze", "temel-malzeme",
 }
 
 
@@ -181,7 +192,9 @@ def guess_category(brand: str | None, name: str,
     haystack = normalize_tr(f"{brand or ''} {name} {unit_raw or ''}")
     best, best_score = None, 0
     for category, pattern in _CATEGORY_PATTERNS.items():
-        score = len(set(pattern.findall(haystack)))
+        # Cok kelimeli ifade daha belirgin bilgi tasir: "toz seker" (2)
+        # tek basina "seker"i (1) yener.
+        score = sum(2 if " " in m else 1 for m in set(pattern.findall(haystack)))
         if score > best_score:
             best, best_score = category, score
     return best
