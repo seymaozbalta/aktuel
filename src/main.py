@@ -5,6 +5,7 @@ Kullanim:
     python -m src.main                        # aktif katalogu kaydet
     python -m src.main --all-catalogs         # tum sekmeleri gez
     python -m src.main --only-temel-gida      # sadece temel gida
+    python -m src.main --store sok --dry-run  # SOK
 """
 from __future__ import annotations
 
@@ -13,9 +14,11 @@ import logging
 import sys
 from .config import today_tr
 from .models import ScrapedProduct
-from .scrapers.bim import BimScraper, filter_temel_gida
+from .scrapers.bim import BimScraper
+from .scrapers.common import filter_temel_gida
+from .scrapers.sok import SokScraper
 
-SCRAPERS = {"bim": BimScraper}
+SCRAPERS = {"bim": BimScraper, "sok": SokScraper}
 
 
 def setup_logging(verbose: bool) -> None:

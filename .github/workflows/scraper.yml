@@ -1,4 +1,4 @@
-name: BİM Aktüel Toplayıcı
+name: Aktüel Toplayıcı
 
 on:
   # GitHub Actions cron'u HER ZAMAN UTC calisir.
@@ -6,22 +6,34 @@ on:
   # 04:00 UTC = 07:00 TSI
   schedule:
     - cron: "0 4 * * *"
-  # Elle tetiklemeye izin ver (Actions sekmesindeki "Run workflow" butonu).
-  # Cron'u beklemeden test edebilmek icin sart.
   workflow_dispatch:
-
-# Ayni anda iki calistirma olmasin. Elle tetikledigin sirada cron da
-# devreye girerse ikisi ayni satirlari yazmaya calisir.
-concurrency:
-  group: bim-scraper
-  cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    # Normalde 30 saniye surer. 10 dakikayi asiyorsa bir sey takilmistir;
-    # sonsuza kadar calisip dakika harcamasin.
-    timeout-minutes: 10
+    timeout-minutes: 15
+
+    # Her market AYRI bir is olarak calisir.
+    #  - fail-fast: false -> SOK patlarsa BIM yine calismaya devam eder.
+    #    Tek iste olsalardi biri digerini de dusururdu.
+    #  - Her marketin kendi saglik esigi var: BIM'in haftalik katalogu ~75
+    #    urun, SOK'un 8 kategorisi yuzlerce urun.
+    #  - Hata e-postasinda hangi marketin bozuldugu dogrudan gorunur.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - store: bim
+            min_products: 40
+          - store: sok
+            min_products: 1000
+
+    # Ayni market icin iki calistirma ust uste binmesin
+    concurrency:
+      group: scraper-${{ matrix.store }}
+      cancel-in-progress: false
+
+    name: ${{ matrix.store }}
 
     steps:
       - name: Depoyu indir
@@ -40,17 +52,16 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          # Hata ayiklama icin ham HTML'i sakla; asagida artifact olarak yuklenir
           SAVE_RAW_HTML: "1"
-        # --min-products: parser kismen bozulursa (75 yerine 4 urun) is
-        # basarisiz olsun ve GitHub sana e-posta atsin. Bu satir olmadan
-        # bozulma sessizce gerceklesir.
-        run: python -m src.main --min-products 40
+        run: >
+          python -m src.main
+          --store ${{ matrix.store }}
+          --min-products ${{ matrix.min_products }}
 
       - name: Hata halinde ham HTML'i sakla
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ham-html-${{ github.run_id }}
+          name: ham-html-${{ matrix.store }}-${{ github.run_id }}
           path: data/raw/
           retention-days: 7

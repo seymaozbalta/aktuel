@@ -59,8 +59,13 @@ class BaseScraper(ABC):
         retry=retry_if_exception_type(requests.RequestException),
         reraise=True,
     )
-    def fetch(self, url: str, *, tag: str = "page") -> str:
-        """Sayfayi indirir, istege bagli olarak ham HTML'i diske yazar."""
+    def fetch(self, url: str, *, tag: str = "page", save: bool = True) -> str:
+        """Sayfayi indirir, istege bagli olarak ham HTML'i diske yazar.
+
+        save=False: sayfalama yapan scraper'larda her sayfayi diske yazmak
+        yuzlerce MB'a cikar. Genelde kategorinin ilk sayfasini saklamak
+        hata ayiklamak icin yeterli.
+        """
         self._throttle()
         log.info("GET %s", url)
         resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
@@ -68,7 +73,7 @@ class BaseScraper(ABC):
         resp.encoding = resp.apparent_encoding or "utf-8"
         html = resp.text
 
-        if SAVE_RAW_HTML:
+        if SAVE_RAW_HTML and save:
             RAW_DIR.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
             path = RAW_DIR / f"{self.store_slug}_{tag}_{stamp}.html"

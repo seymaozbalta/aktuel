@@ -29,6 +29,12 @@ USER_AGENT = os.getenv(
 BIM_BASE_URL = "https://www.bim.com.tr"
 BIM_AKTUEL_PATH = "/categories/100/aktuel-urunler.aspx"
 
+# --- SOK ------------------------------------------------------------------
+SOK_BASE_URL = "https://www.sokmarket.com.tr"
+# Bir kategoride en fazla kac sayfa gezilsin (sonsuz donguye karsi sigorta).
+# Sayfa basi 20 urun -> 30 sayfa = 600 urun/kategori.
+SOK_MAX_PAGES = int(os.getenv("SOK_MAX_PAGES", "30"))
+
 # --- Dosya yollari --------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = PROJECT_ROOT / "data" / "raw"

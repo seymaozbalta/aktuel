@@ -49,7 +49,12 @@ def get_or_create_store(sb: Client, slug: str, name: str,
 def upsert_products(sb: Client, store_id: int,
                     items: Iterable[ScrapedProduct]) -> dict[str, int]:
     """products tablosuna yazar, {fingerprint: product_id} dondurur."""
-    rows = [item.product_row(store_id) for item in items]
+    # Ayni urun iki kategoride gorunebilir. Tek upsert isteginde ayni
+    # fingerprint iki kez olursa Postgres su hatayi verir:
+    #   "ON CONFLICT DO UPDATE command cannot affect row a second time"
+    # Bu yuzden once tekillestiriyoruz (sonraki kazanir).
+    unique = {item.fingerprint: item for item in items}
+    rows = [item.product_row(store_id) for item in unique.values()]
     mapping: dict[str, int] = {}
 
     for chunk in _chunks(rows):
@@ -86,13 +91,15 @@ def upsert_prices(sb: Client, mapping: dict[str, int],
                   items: Iterable[ScrapedProduct],
                   scrape_date: date | None = None) -> int:
     scrape_date = scrape_date or today_tr()
-    rows: list[dict] = []
+    by_product: dict[int, dict] = {}
     for item in items:
         product_id = mapping.get(item.fingerprint)
         if product_id is None:
             log.warning("product_id bulunamadi, fiyat atlandi: %s", item.name)
             continue
-        rows.append(item.price_row(product_id, scrape_date))
+        # ayni (product_id, scrape_date) iki kez gelmesin -> Postgres hatasi
+        by_product[product_id] = item.price_row(product_id, scrape_date)
+    rows = list(by_product.values())
 
     written = 0
     for chunk in _chunks(rows):
