@@ -65,3 +65,34 @@ jobs:
           name: ham-html-${{ matrix.store }}-${{ github.run_id }}
           path: data/raw/
           retention-days: 7
+
+  # Eslestirme, IKI marketin de verisi yazildiktan SONRA calismali.
+  #  - needs: scrape  -> matristeki butun isleri (bim, sok) bekler
+  #  - !cancelled()   -> biri basarisiz olsa bile eldeki veriyle calisir.
+  #    Bu olmasaydi, SOK'un bozuldugu bir gun BIM'in eslesmeleri de
+  #    guncellenmezdi.
+  match:
+    needs: scrape
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Depoyu indir
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Bagimliliklari yukle
+        run: pip install -r requirements.txt
+
+      - name: Urunleri eslestir
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m src.matching
+
